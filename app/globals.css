@@ -1,79 +1,274 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------ *
+ * Pulse — the night side of Earth.
+ * Every person is a city light; a conversation is a thread of light.
+ * ------------------------------------------------------------------ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --ink: #080b14;
+  --dusk: #121830;
+  --dusk-2: #1a2243;
+  --line: rgba(255, 255, 255, 0.09);
+  --text: #eef0f8;
+  --muted: #8d95b3;
+  --sodium: #ffc46b; /* primary action — the colour of streetlights */
+  --sodium-deep: #f0a63a;
+  --lagoon: #5eead4; /* "you" */
+  --rose: #ff7a8a; /* end / block */
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-ink: var(--ink);
+  --color-dusk: var(--dusk);
+  --color-dusk-2: var(--dusk-2);
+  --color-line: var(--line);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-sodium: var(--sodium);
+  --color-sodium-deep: var(--sodium-deep);
+  --color-lagoon: var(--lagoon);
+  --color-rose: var(--rose);
+  --font-sans: var(--font-sans-loaded), system-ui, sans-serif;
+  --font-display: var(--font-display-loaded), Georgia, serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--ink);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Live user dots on the map */
+:focus-visible {
+  outline: 2px solid var(--sodium);
+  outline-offset: 2px;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* ---------- shared surfaces ---------- */
+
+.glass {
+  background: color-mix(in srgb, var(--dusk) 82%, transparent);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 24px 60px -20px rgba(0, 0, 0, 0.7);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  padding: 0.6rem 1.15rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition:
+    transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 0.15s,
+    border-color 0.15s,
+    opacity 0.15s;
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.btn:disabled {
+  opacity: 0.4;
+}
+.btn-primary {
+  background: var(--sodium);
+  color: #2a1a00;
+}
+.btn-primary:hover:not(:disabled) {
+  background: #ffd08a;
+}
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+.btn-danger {
+  background: var(--rose);
+  color: #3a0610;
+}
+.btn-danger:hover:not(:disabled) {
+  background: #ff9aa6;
+}
+
+/* ---------- map: people as lights ---------- */
+
 .pulse-dot {
+  --c: #ffc46b;
+  position: relative;
   width: 14px;
   height: 14px;
-  border-radius: 9999px;
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  cursor: pointer;
   padding: 0;
-  box-shadow: 0 0 0 rgba(255, 255, 255, 0.5);
-  animation: pulse-ring 2s ease-out infinite;
-  transition: transform 0.1s ease;
+  border: 0;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 35%, #fff 0%, var(--c) 55%);
+  box-shadow:
+    0 0 10px 2px color-mix(in srgb, var(--c) 70%, transparent),
+    0 0 28px 6px color-mix(in srgb, var(--c) 35%, transparent);
+  animation: breathe 3.4s ease-in-out infinite;
+  animation-delay: var(--d, 0s);
+  transition:
+    opacity 0.4s,
+    filter 0.4s;
+}
+/* Generous invisible hit area so dots are easy to tap on touch screens. */
+.pulse-dot::before {
+  content: "";
+  position: absolute;
+  inset: -14px;
+  border-radius: 9999px;
+}
+.pulse-dot:hover:not([data-busy="true"]) {
+  filter: brightness(1.35);
+  animation-play-state: paused;
+  transform: scale(1.35);
+}
+.pulse-dot[data-busy="true"] {
+  opacity: 0.4;
+  filter: saturate(0.4);
+  animation-duration: 6s;
+  cursor: default;
+}
+/* A ripple that plays once when someone new appears. */
+.pulse-dot[data-new="true"]::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  border: 2px solid var(--c);
+  animation: arrive 1.8s cubic-bezier(0.1, 0.6, 0.3, 1) 2;
+  pointer-events: none;
 }
 
-.pulse-dot:hover {
-  transform: scale(1.3);
-}
-
-/* The user's own "you are here" pin — small, sized like the dots. */
 .pulse-me {
   position: relative;
-  font-size: 18px;
-  line-height: 1;
-  cursor: default;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: var(--lagoon);
+  border: 3px solid var(--ink);
+  box-shadow:
+    0 0 0 2px var(--lagoon),
+    0 0 24px 6px rgba(94, 234, 212, 0.5);
 }
-
+.pulse-me::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 9999px;
+  border: 2px solid var(--lagoon);
+  animation: arrive 2.6s ease-out infinite;
+}
 .pulse-me-label {
   position: absolute;
-  bottom: 100%;
+  bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  margin-bottom: 1px;
-  font-size: 10px;
-  font-weight: 700;
-  color: #ffffff;
-  background: rgba(0, 0, 0, 0.6);
-  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--lagoon);
+  padding: 1px 8px;
   border-radius: 9999px;
   white-space: nowrap;
 }
 
-@keyframes pulse-ring {
-  0% {
-    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.88;
   }
-  70% {
-    box-shadow: 0 0 0 8px rgba(255, 255, 255, 0);
+  50% {
+    transform: scale(1.18);
+    opacity: 1;
+  }
+}
+
+@keyframes arrive {
+  0% {
+    transform: scale(1);
+    opacity: 0.9;
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+    transform: scale(4.2);
+    opacity: 0;
+  }
+}
+
+/* ---------- entry: a field of drifting lights ---------- */
+
+.field-dot {
+  position: absolute;
+  width: var(--s, 4px);
+  height: var(--s, 4px);
+  border-radius: 9999px;
+  background: var(--c, #ffc46b);
+  box-shadow: 0 0 12px 3px color-mix(in srgb, var(--c, #ffc46b) 60%, transparent);
+  animation: breathe var(--t, 4s) ease-in-out infinite;
+  animation-delay: var(--d, 0s);
+}
+
+.mapboxgl-ctrl-bottom-left,
+.mapboxgl-ctrl-bottom-right {
+  opacity: 0.55;
+}
+
+/* ---------- slide-in surfaces ---------- */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes ring {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

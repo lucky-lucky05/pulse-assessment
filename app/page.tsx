@@ -6,7 +6,7 @@ import WorldMap from "./components/WorldMap";
 import ConnectionPrompt from "./components/ConnectionPrompt";
 import ChatPanel, { type ChatMessage } from "./components/ChatPanel";
 import VideoPanel from "./components/VideoPanel";
-import { join, leave, poll, sendSignal } from "@/lib/api";
+import { blockPeer, join, leave, poll, sendSignal } from "@/lib/api";
 import { PeerSession, type DescType, type PeerControl } from "@/lib/webrtc";
 import { POLL_INTERVAL_MS } from "@/lib/presence";
 import { type PeerDot, type SignalMsg } from "@/lib/types";
@@ -55,9 +55,12 @@ export default function Home() {
   const msgId = useRef(0);
   const requestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   function showNotice(text: string) {
     setNotice(text);
-    window.setTimeout(() => setNotice(null), 3500);
+    // Restart the timer so a newer notice isn't cleared by an older one.
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 4000);
   }
 
   function addMessage(mine: boolean, text: string) {
@@ -178,6 +181,15 @@ export default function Home() {
       void sendSignal(sessionId, c.peerId, "end");
     }
     teardown(message);
+  }
+
+  // Block the stranger: the server hangs up, tells them it ended, and hides
+  // both dots from each other for the rest of this session.
+  function blockCurrent() {
+    const c = connRef.current;
+    if (c.kind !== "connecting" && c.kind !== "connected") return;
+    void blockPeer(sessionId, c.peerId);
+    teardown("Blocked. You won't see each other again this session.");
   }
 
   function startVideoRequest() {
@@ -345,7 +357,7 @@ export default function Home() {
   const inChat = conn.kind === "connecting" || conn.kind === "connected";
 
   return (
-    <main className="fixed inset-0 overflow-hidden">
+    <main className="fixed inset-0 overflow-hidden bg-ink">
       <WorldMap
         peers={peers}
         me={myLocation}
@@ -353,19 +365,30 @@ export default function Home() {
         canConnect={conn.kind === "idle"}
       />
 
+      {conn.kind === "idle" && !notice && (
+        <div className="glass rise pointer-events-none absolute left-1/2 top-5 z-10 max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-full px-4 py-2 text-sm text-text/90">
+          {peers.length === 0
+            ? "Nobody else is here yet. Keep this tab open."
+            : "Tap a light to say hello"}
+        </div>
+      )}
+
       {notice && (
-        <div className="absolute left-1/2 top-20 z-30 -translate-x-1/2 rounded-full bg-zinc-800/90 px-4 py-2 text-sm text-zinc-100 shadow-lg backdrop-blur">
+        <div
+          role="status"
+          className="glass rise absolute left-1/2 top-5 z-30 max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-full px-4 py-2 text-sm"
+        >
           {notice}
         </div>
       )}
 
       {conn.kind === "requesting" && (
-        <div className="absolute left-1/2 top-20 z-30 flex -translate-x-1/2 items-center gap-3 rounded-full bg-zinc-800/90 px-4 py-2 text-sm text-zinc-100 shadow-lg backdrop-blur">
-          <span>Requesting connection…</span>
-          <button
-            onClick={cancelRequest}
-            className="rounded-full bg-zinc-700 px-3 py-1 text-xs hover:bg-zinc-600"
-          >
+        <div
+          role="status"
+          className="glass rise absolute left-1/2 top-5 z-30 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 rounded-full py-1.5 pl-4 pr-1.5 text-sm"
+        >
+          <span>Waiting for them to answer…</span>
+          <button onClick={cancelRequest} className="btn btn-ghost py-1.5">
             Cancel
           </button>
         </div>
@@ -373,9 +396,10 @@ export default function Home() {
 
       {conn.kind === "incoming" && (
         <ConnectionPrompt
-          title="A stranger wants to connect"
+          title="Someone wants to say hello"
+          subtitle="You'll only chat if you accept. Nothing is shared until then."
           acceptLabel="Accept"
-          declineLabel="Decline"
+          declineLabel="Not now"
           onAccept={acceptIncoming}
           onDecline={declineIncoming}
         />
@@ -392,21 +416,25 @@ export default function Home() {
           }}
           onStartVideo={startVideoRequest}
           onEnd={() => endConnection()}
+          onBlock={blockCurrent}
         />
       )}
 
       {video === "requesting" && (
-        <div className="absolute bottom-24 left-1/2 z-30 -translate-x-1/2 rounded-full bg-zinc-800/90 px-4 py-2 text-sm text-zinc-100 shadow-lg backdrop-blur">
-          Waiting for stranger to accept video…
+        <div
+          role="status"
+          className="glass rise absolute left-1/2 top-5 z-30 max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-full px-4 py-2 text-sm"
+        >
+          Waiting for them to accept video…
         </div>
       )}
 
       {video === "incoming" && (
         <ConnectionPrompt
-          title="Start video call?"
-          subtitle="The stranger wants to turn on video."
+          title="Start a video call?"
+          subtitle="Their video starts blurred on your screen. You choose when to show it."
           acceptLabel="Accept"
-          declineLabel="Decline"
+          declineLabel="Not now"
           onAccept={acceptVideo}
           onDecline={declineVideo}
         />
@@ -416,6 +444,8 @@ export default function Home() {
         <VideoPanel
           localStream={localStream}
           remoteStream={remoteStream}
+          onToggleMic={(on) => peerRef.current?.setTrackEnabled("audio", on)}
+          onToggleCam={(on) => peerRef.current?.setTrackEnabled("video", on)}
           onEnd={endVideo}
         />
       )}

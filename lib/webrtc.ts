@@ -196,6 +196,13 @@ export class PeerSession {
     return this.localStream;
   }
 
+  // Mute / camera-off without renegotiating: just disable the local tracks.
+  setTrackEnabled(kind: "audio" | "video", enabled: boolean) {
+    for (const track of this.localStream?.getTracks() ?? []) {
+      if (track.kind === kind) track.enabled = enabled;
+    }
+  }
+
   stopVideo() {
     if (this.localStream) {
       for (const track of this.localStream.getTracks()) track.stop();
