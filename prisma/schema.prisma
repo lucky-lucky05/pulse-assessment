@@ -16,6 +16,7 @@ model Presence {
   lat      Float // ALREADY privacy-offset coords (raw is never stored)
   lng      Float
   busy     Boolean  @default(false) // true while in an active connection
+  peerId   String? // the session we're connected to (set on accept, cleared on end/leave)
   lastSeen DateTime
 
   @@index([lastSeen])

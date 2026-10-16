@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { freePair } from "@/lib/pairing";
 import type { SignalType } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -69,18 +70,21 @@ export async function POST(request: NextRequest) {
   }
 
   // Busy transitions:
-  // - accept: the connection is now active → mark BOTH peers busy.
-  // - decline/end: free both peers.
+  // - accept: the connection is now active → mark BOTH peers busy and pair them.
+  // - end: free both peers — but only if they are actually paired with each
+  //   other, so a stray "end"/"decline" can't free someone else's connection.
+  // - decline: a request was refused; nobody was busy because of it, so no change.
   if (signalType === "accept") {
     await prisma.presence.updateMany({
-      where: { id: { in: [fromId, toId] } },
-      data: { busy: true },
+      where: { id: fromId },
+      data: { busy: true, peerId: toId },
     });
-  } else if (signalType === "decline") {
     await prisma.presence.updateMany({
-      where: { id: { in: [fromId, toId] } },
-      data: { busy: false },
+      where: { id: toId },
+      data: { busy: true, peerId: fromId },
     });
+  } else if (signalType === "end") {
+    await freePair(fromId, toId);
   }
 
   await prisma.signal.create({
