@@ -123,8 +123,9 @@ notifications, push instead of polling (SSE/Pusher), shared-store rate limiting.
   peer dot collapsed to the top-left corner. Fixed by wrapping each dot.
 - Caveats: the e2e stubs Mapbox's style request (no real token was available),
   so the _real_ dark-v11 basemap/globe fog was not seen. Video steps need
-  headed Chrome (headless fake camera never resolves); they passed headed
-  before the final dot-wrapper change, and the video code was not touched by it.
+  headed Chrome (headless fake camera never resolves); the full run, video
+  included, passed headed on the final code (remote frames on both sides,
+  blur-first, reveal/re-blur, mute, end video, block).
 - Not done: Vercel deployment (needs a Mapbox token, a hosted Postgres URL and a
   Vercel login). Steps: set `DATABASE_URL` + `NEXT_PUBLIC_MAPBOX_TOKEN` in
   Vercel, run `npx prisma migrate deploy` against that database, deploy.
