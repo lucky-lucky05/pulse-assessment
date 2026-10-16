@@ -49,6 +49,7 @@ export default function Home() {
   };
 
   const peerRef = useRef<PeerSession | null>(null);
+  const rawLocationRef = useRef<{ lat: number; lng: number } | null>(null);
   const msgId = useRef(0);
   const requestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -279,6 +280,12 @@ export default function Home() {
       try {
         const data = await poll(sessionId);
         if (!active) return;
+        // Our presence row was reaped (throttled background tab) or removed by
+        // a bfcache `pagehide` leave — put our dot back on the map.
+        if (!data.online && rawLocationRef.current) {
+          const { lat, lng } = rawLocationRef.current;
+          await join(sessionId, lat, lng);
+        }
         setPeers(data.peers);
         for (const s of data.signals) processSignalRef.current(s);
       } catch {}
@@ -304,6 +311,7 @@ export default function Home() {
   }, [sessionId, phase]);
 
   async function handleReady(lat: number, lng: number) {
+    rawLocationRef.current = { lat, lng };
     setMyLocation({ lat, lng });
     await join(sessionId, lat, lng);
     setPhase("live");
