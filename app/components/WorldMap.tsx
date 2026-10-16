@@ -230,8 +230,13 @@ export default function WorldMap({
         let marker = markers.get(peer.id);
         if (!marker) {
           const h = hashOf(peer.id);
+          // Mapbox positions the marker element with an inline `transform`, so
+          // the animated dot (which also uses transform) must be a child of a
+          // plain wrapper — otherwise the animation overrides the position.
+          const wrap = document.createElement("div");
           const el = document.createElement("button");
           el.className = "pulse-dot";
+          wrap.appendChild(el);
           el.style.setProperty("--c", LIGHTS[h % LIGHTS.length]);
           el.style.setProperty("--d", `${-((h >> 3) % 34) / 10}s`);
           el.addEventListener("click", (e) => {
@@ -243,13 +248,13 @@ export default function WorldMap({
             el.dataset.new = "true";
             window.setTimeout(() => delete el.dataset.new, 4000);
           }
-          marker = new mapboxgl.Marker({ element: el })
+          marker = new mapboxgl.Marker({ element: wrap })
             .setLngLat([peer.lng, peer.lat])
             .addTo(map);
           markers.set(peer.id, marker);
         }
         known.add(peer.id);
-        const el = marker.getElement();
+        const el = marker.getElement().firstElementChild as HTMLButtonElement;
         el.dataset.busy = String(peer.busy);
         el.title = peer.busy ? "In a conversation" : "Say hello";
         el.setAttribute(
