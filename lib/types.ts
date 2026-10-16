@@ -23,6 +23,8 @@ export interface PeerDot {
   lat: number;
   lng: number;
   busy: boolean;
+  // Public id of the stranger this dot is currently talking to, if any.
+  talkingTo: string | null;
 }
 
 export interface SignalMsg {

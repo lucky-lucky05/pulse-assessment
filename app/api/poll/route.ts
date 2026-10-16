@@ -41,7 +41,13 @@ export const GET = guarded("poll", 600, 60_000, async (request) => {
     select: { id: true, pub: true },
   });
   if (stale.length > 0) {
-    await releasePeersOf(stale.map((s) => s.pub));
+    const stalePubs = stale.map((s) => s.pub);
+    await releasePeersOf(stalePubs);
+    await prisma.block.deleteMany({
+      where: {
+        OR: [{ blockerPub: { in: stalePubs } }, { blockedPub: { in: stalePubs } }],
+      },
+    });
     await prisma.presence.deleteMany({
       where: { id: { in: stale.map((s) => s.id) } },
     });
@@ -55,10 +61,23 @@ export const GET = guarded("poll", 600, 60_000, async (request) => {
       })
     : null;
 
-  // 3) Online peers, excluding self.
+  // 3) Online peers, excluding self and anyone blocked in either direction.
+  const blocks = me
+    ? await prisma.block.findMany({
+        where: { OR: [{ blockerPub: me.pub }, { blockedPub: me.pub }] },
+        select: { blockerPub: true, blockedPub: true },
+      })
+    : [];
+  const hidden = blocks.map((b) =>
+    b.blockerPub === me?.pub ? b.blockedPub : b.blockerPub,
+  );
   const peers = await prisma.presence.findMany({
-    where: { id: { not: id }, lastSeen: { gte: staleCutoff } },
-    select: { pub: true, lat: true, lng: true, busy: true },
+    where: {
+      id: { not: id },
+      lastSeen: { gte: staleCutoff },
+      ...(hidden.length > 0 ? { pub: { notIn: hidden } } : {}),
+    },
+    select: { pub: true, lat: true, lng: true, busy: true, peerPub: true },
     take: MAX_PEERS,
   });
 
@@ -86,6 +105,9 @@ export const GET = guarded("poll", 600, 60_000, async (request) => {
       lat: p.lat,
       lng: p.lng,
       busy: p.busy,
+      // Public handle of who they're talking to (if visible to us) — lets the
+      // map draw an anonymous arc between two live conversations.
+      talkingTo: p.peerPub,
     })),
     signals: inbox.map((s) => ({
       id: s.id,

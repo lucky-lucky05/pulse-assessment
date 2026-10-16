@@ -103,6 +103,17 @@ export const POST = guarded("signal", 300, 60_000, async (request) => {
       // and a busy/offline target auto-declines instead of being disturbed.
       if (me.busy) return json({ error: "already connected" }, 409);
       if (!target || target.busy) return autoDecline();
+      // Blocked either way: look like an ordinary decline, reveal nothing.
+      const blocked = await prisma.block.findFirst({
+        where: {
+          OR: [
+            { blockerPub: toId, blockedPub: me.pub },
+            { blockerPub: me.pub, blockedPub: toId },
+          ],
+        },
+        select: { id: true },
+      });
+      if (blocked) return autoDecline();
       await prisma.presence.update({
         where: { id: me.id },
         data: { pendingPub: toId },

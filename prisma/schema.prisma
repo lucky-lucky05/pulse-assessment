@@ -30,6 +30,19 @@ model Presence {
   @@index([peerPub])
 }
 
+// Session-scoped block list. A block hides both users from each other on the
+// map and rejects requests between them. Rows are deleted when either session
+// ends, so nothing outlives the session.
+model Block {
+  id         String   @id @default(uuid())
+  blockerPub String
+  blockedPub String
+  createdAt  DateTime @default(now())
+
+  @@unique([blockerPub, blockedPub])
+  @@index([blockedPub])
+}
+
 model Signal {
   // Mailbox for connection requests + WebRTC signaling only.
   id        String   @id @default(uuid())

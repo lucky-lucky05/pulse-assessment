@@ -45,6 +45,20 @@ export async function sendSignal(
   }
 }
 
+// Block a stranger for the rest of this session (hangs up and hides both dots).
+export async function blockPeer(token: string, targetId: string): Promise<boolean> {
+  try {
+    const res = await fetch("/api/block", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, targetId }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 // Fire-and-forget leave that survives the tab closing.
 export function leave(token: string): void {
   const body = JSON.stringify({ token });

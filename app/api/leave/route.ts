@@ -26,6 +26,9 @@ export const POST = guarded("leave", 60, 60_000, async (request) => {
   await prisma.signal.deleteMany({
     where: { OR: [{ toPub: me.pub }, { fromPub: me.pub }] },
   });
+  await prisma.block.deleteMany({
+    where: { OR: [{ blockerPub: me.pub }, { blockedPub: me.pub }] },
+  });
   await releasePeersOf([me.pub]);
   await prisma.presence.deleteMany({ where: { id: hashToken(token) } });
 

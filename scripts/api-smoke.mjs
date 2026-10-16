@@ -99,6 +99,31 @@ check("B is no longer busy after A left", pc.peers.find((p) => p.id === b.id)?.b
 const gone = await poll(A);
 check("poll after leave reports offline", gone.online === false);
 
+// --- Block (Phase 4) -------------------------------------------------------
+const D = randomUUID();
+const E = randomUUID();
+const d = await join(D, 40.7, -74.0);
+const e = await join(E, 40.8, -73.9);
+await signal(D, e.id, "request");
+await signal(E, d.id, "accept");
+const arcs = (await poll(C)).peers;
+check(
+  "paired dots expose who they're talking to (for map arcs)",
+  arcs.find((p) => p.id === d.id)?.talkingTo === e.id,
+);
+await fetch(`${BASE}/api/block`, {
+  method: "POST",
+  body: JSON.stringify({ token: E, targetId: d.id }),
+});
+const pd = await poll(D);
+check("blocked user is told the chat ended", pd.signals.some((s) => s.type === "end" && s.fromId === e.id));
+check("block hides the blocker from the blocked", !pd.peers.some((p) => p.id === e.id));
+check("block hides the blocked from the blocker", !(await poll(E)).peers.some((p) => p.id === d.id));
+r = await signal(D, e.id, "request");
+check("blocked user's requests auto-decline", r.body.autoDeclined === true, JSON.stringify(r.body));
+await leave(D);
+await leave(E);
+
 // --- Stale expiry (the original bug) ---------------------------------------
 console.log("...waiting 17s for stale expiry (C keeps polling, B does not)");
 for (let i = 0; i < 11; i++) {
