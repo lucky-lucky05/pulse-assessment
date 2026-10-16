@@ -84,11 +84,15 @@ export default function Home() {
       onRemoteStream: (stream) => setRemoteStream(stream),
       onConnectionState: (state) => {
         if (state === "failed") {
-          teardown("Connection failed (network).");
+          endConnection("Connection failed (network).");
         }
       },
       onChannelOpen: () => {
         setConn({ kind: "connected", peerId });
+      },
+      onChannelClose: () => {
+        // Only react if this is still the active session's channel.
+        if (peerRef.current === ps) endConnection("Stranger disconnected.");
       },
     });
     peerRef.current = ps;
@@ -165,12 +169,13 @@ export default function Home() {
     setConn({ kind: "idle" });
   }
 
-  function endConnection() {
+  function endConnection(message?: string) {
     const c = connRef.current;
+    // The "end" signal also tells the server to free both peers' busy flag.
     if (c.kind === "connecting" || c.kind === "connected") {
       void sendSignal(sessionId, c.peerId, "end");
     }
-    teardown();
+    teardown(message);
   }
 
   function startVideoRequest() {
@@ -267,8 +272,10 @@ export default function Home() {
   }
 
   const processSignalRef = useRef(processSignal);
+  const endConnectionRef = useRef(endConnection);
   useEffect(() => {
     processSignalRef.current = processSignal;
+    endConnectionRef.current = endConnection;
   });
 
   useEffect(() => {
@@ -287,6 +294,15 @@ export default function Home() {
           await join(sessionId, lat, lng);
         }
         setPeers(data.peers);
+        // If the stranger we're talking to vanished from the map (closed the
+        // tab, got reaped), end the chat for us too.
+        const c = connRef.current;
+        if (
+          (c.kind === "connecting" || c.kind === "connected") &&
+          !data.peers.some((p) => p.id === c.peerId)
+        ) {
+          endConnectionRef.current("Stranger disconnected.");
+        }
         for (const s of data.signals) processSignalRef.current(s);
       } catch {}
       if (active) timer = setTimeout(tick, POLL_INTERVAL_MS);
@@ -370,7 +386,7 @@ export default function Home() {
             addMessage(true, text);
           }}
           onStartVideo={startVideoRequest}
-          onEnd={endConnection}
+          onEnd={() => endConnection()}
         />
       )}
 
