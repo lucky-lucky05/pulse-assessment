@@ -5,6 +5,16 @@ export type PeerControl =
   | "video-decline"
   | "video-end";
 
+export const MAX_MESSAGE_CHARS = 1000;
+const CHAT_BURST = 20;
+const CHAT_WINDOW_MS = 10_000;
+const CONTROLS = new Set<string>([
+  "video-request",
+  "video-accept",
+  "video-decline",
+  "video-end",
+]);
+
 interface PeerCallbacks {
   onSignal: (type: DescType, payload: string) => void;
   onChat: (text: string) => void;
@@ -80,11 +90,21 @@ export class PeerSession {
       if (!this.closed) this.cb.onChannelClose();
     };
     dc.onmessage = (e) => {
+      // The other end is an untrusted stranger: bound everything they can make
+      // us process or render.
+      if (typeof e.data !== "string" || e.data.length > MAX_MESSAGE_CHARS + 64) {
+        return;
+      }
       try {
-        const msg = JSON.parse(e.data as string);
+        const msg = JSON.parse(e.data);
         if (msg.t === "chat" && typeof msg.text === "string") {
-          this.cb.onChat(msg.text);
-        } else if (msg.t === "ctrl" && typeof msg.ctrl === "string") {
+          if (!this.allowIncoming()) return;
+          this.cb.onChat(msg.text.slice(0, MAX_MESSAGE_CHARS));
+        } else if (
+          msg.t === "ctrl" &&
+          typeof msg.ctrl === "string" &&
+          CONTROLS.has(msg.ctrl)
+        ) {
           this.cb.onControl(msg.ctrl as PeerControl);
         }
       } catch {}
@@ -136,9 +156,21 @@ export class PeerSession {
     }
   }
 
+  // Drop floods: at most CHAT_BURST incoming messages per CHAT_WINDOW_MS.
+  private incomingTimes: number[] = [];
+  private allowIncoming(): boolean {
+    const now = Date.now();
+    this.incomingTimes = this.incomingTimes.filter(
+      (t) => now - t < CHAT_WINDOW_MS,
+    );
+    if (this.incomingTimes.length >= CHAT_BURST) return false;
+    this.incomingTimes.push(now);
+    return true;
+  }
+
   sendChat(text: string) {
     // Must match the "chat" tag the receiver switches on in wireDataChannel.
-    this.safeSend({ t: "chat", text });
+    this.safeSend({ t: "chat", text: text.slice(0, MAX_MESSAGE_CHARS) });
   }
 
   sendControl(ctrl: PeerControl) {
