@@ -12,24 +12,34 @@ datasource db {
 }
 
 model Presence {
-  id       String   @id // client-generated session uuid
-  lat      Float // ALREADY privacy-offset coords (raw is never stored)
-  lng      Float
-  busy     Boolean  @default(false) // true while in an active connection
-  peerId   String? // the session we're connected to (set on accept, cleared on end/leave)
-  lastSeen DateTime
+  // SHA-256 of the client's secret session token. The token is the bearer
+  // credential for poll/signal/leave and is never sent to other users; the
+  // database only ever holds its hash.
+  id         String   @id
+  // Public, server-issued handle that other users see and address signals to.
+  // Unrelated to the secret token, so knowing it grants no access.
+  pub        String   @unique
+  lat        Float // ALREADY privacy-offset coords (raw is never stored)
+  lng        Float
+  busy       Boolean  @default(false) // true while in an active connection
+  peerPub    String? // pub of the session we are connected to
+  pendingPub String? // pub of the session we have an outstanding request to
+  lastSeen   DateTime
 
   @@index([lastSeen])
+  @@index([peerPub])
 }
 
 model Signal {
   // Mailbox for connection requests + WebRTC signaling only.
   id        String   @id @default(uuid())
-  toId      String // recipient session id
-  fromId    String // sender session id
+  seq       Int      @default(autoincrement()) // total order for delivery
+  toPub     String // recipient public id
+  fromPub   String // sender public id
   type      String // request | accept | decline | offer | answer | ice | end
   payload   String? // JSON string (SDP / ICE candidate)
   createdAt DateTime @default(now())
 
-  @@index([toId])
+  @@index([toPub])
+  @@index([createdAt])
 }

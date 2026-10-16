@@ -10,6 +10,14 @@ export type SignalType =
   | "ice" // WebRTC ICE candidate
   | "end"; // hang up / leave the connection
 
+// Response to joining: the public id other users see us as, and the
+// privacy-offset position our dot is drawn at.
+export interface JoinResponse {
+  id: string;
+  lat: number;
+  lng: number;
+}
+
 export interface PeerDot {
   id: string;
   lat: number;

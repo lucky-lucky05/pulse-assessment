@@ -1,47 +1,56 @@
-import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { applyPrivacyOffset, isValidLatLng } from "@/lib/geo";
+import { guarded, json, readJson } from "@/lib/server/http";
+import { hashToken, isValidToken, newPublicId } from "@/lib/server/auth";
+import type { JoinResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// POST /api/join — body { id, lat, lng } (raw coords).
-// Applies a 1–3 km privacy offset and upserts the presence row. Raw
-// coordinates are never stored.
-export async function POST(request: NextRequest) {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "invalid body" }, { status: 400 });
-  }
+// POST /api/join — body { token, lat, lng } (raw coords).
+// Applies a 1–3 km privacy offset server-side and creates the presence row.
+// Raw coordinates are never stored. The offset position is returned so the
+// client can show "you" exactly where everyone else sees you.
+export const POST = guarded("join", 20, 60_000, async (request) => {
+  const body = await readJson(request, 1024);
+  if (!body) return json({ error: "invalid body" }, 400);
 
-  const { id, lat, lng } = (body ?? {}) as Record<string, unknown>;
-
-  if (typeof id !== "string" || id.length < 8 || id.length > 64) {
-    return Response.json({ error: "invalid id" }, { status: 400 });
-  }
+  const { token, lat, lng } = body;
+  if (!isValidToken(token)) return json({ error: "invalid token" }, 400);
   if (!isValidLatLng(lat, lng)) {
-    return Response.json({ error: "invalid coordinates" }, { status: 400 });
+    return json({ error: "invalid coordinates" }, 400);
+  }
+
+  const id = hashToken(token);
+  const now = new Date();
+
+  // Re-joining an existing session must NOT re-roll the offset: repeated joins
+  // with the same real coordinates would otherwise let anyone average the
+  // random offsets back out to the true location. Just refresh the heartbeat.
+  const existing = await prisma.presence.findUnique({ where: { id } });
+  if (existing) {
+    await prisma.presence.update({ where: { id }, data: { lastSeen: now } });
+    return json({
+      id: existing.pub,
+      lat: existing.lat,
+      lng: existing.lng,
+    } satisfies JoinResponse);
   }
 
   const offset = applyPrivacyOffset(lat as number, lng as number);
-
-  await prisma.presence.upsert({
-    where: { id },
-    create: {
+  const created = await prisma.presence.create({
+    data: {
       id,
+      pub: newPublicId(),
       lat: offset.lat,
       lng: offset.lng,
-      busy: false,
-      lastSeen: new Date(),
-    },
-    update: {
-      lat: offset.lat,
-      lng: offset.lng,
-      lastSeen: new Date(),
+      lastSeen: now,
     },
   });
 
-  return Response.json({ ok: true });
-}
+  return json({
+    id: created.pub,
+    lat: created.lat,
+    lng: created.lng,
+  } satisfies JoinResponse);
+});

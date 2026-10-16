@@ -24,6 +24,8 @@ const REQUEST_TIMEOUT_MS = 30_000;
 
 export default function Home() {
   const [phase, setPhase] = useState<"gate" | "live">("gate");
+  // Secret session token: authenticates this tab to the API. Never rendered or
+  // sent to other users (they only see our server-issued public id).
   const [sessionId] = useState(() => crypto.randomUUID());
   const [peers, setPeers] = useState<PeerDot[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -291,7 +293,8 @@ export default function Home() {
         // a bfcache `pagehide` leave — put our dot back on the map.
         if (!data.online && rawLocationRef.current) {
           const { lat, lng } = rawLocationRef.current;
-          await join(sessionId, lat, lng);
+          const me = await join(sessionId, lat, lng);
+          setMyLocation({ lat: me.lat, lng: me.lng });
         }
         setPeers(data.peers);
         // If the stranger we're talking to vanished from the map (closed the
@@ -328,8 +331,10 @@ export default function Home() {
 
   async function handleReady(lat: number, lng: number) {
     rawLocationRef.current = { lat, lng };
-    setMyLocation({ lat, lng });
-    await join(sessionId, lat, lng);
+    // Show "you" where the server placed the dot (offset), never at the exact
+    // real location — what you see is what strangers see.
+    const me = await join(sessionId, lat, lng);
+    setMyLocation({ lat: me.lat, lng: me.lng });
     setPhase("live");
   }
 
