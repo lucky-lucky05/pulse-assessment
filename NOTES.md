@@ -112,10 +112,20 @@ notifications, push instead of polling (SSE/Pusher), shared-store rate limiting.
 
 ## Assumptions & honest verification status
 
-- Verified: typecheck, lint, production-shaped Prisma migrations
-  (`migrate deploy` + `migrate diff` = no drift), and the API smoke test.
-- The map UI, WebRTC chat and video were **not** exercised end to end in a
-  browser by me in this environment (needs a Mapbox token and two
-  media-capable browsers); treat those flows as reviewed-by-reading until you
-  have clicked through them.
+- Verified: typecheck, lint, production build, Prisma migrations
+  (`migrate deploy` + `migrate diff` = no drift), the API smoke test
+  (`scripts/api-smoke.mjs`), and a real-browser run of `scripts/e2e.mjs`:
+  three Chrome sessions go through map → request → accept → WebRTC chat both
+  ways → video with blur-first reveal/re-blur and mute → end video → block →
+  leave, plus a bystander seeing busy dots and the conversation arc.
+- That e2e run found a bug the API tests could not: my `breathe`/hover
+  animations set `transform` on the same element Mapbox positions, so every
+  peer dot collapsed to the top-left corner. Fixed by wrapping each dot.
+- Caveats: the e2e stubs Mapbox's style request (no real token was available),
+  so the _real_ dark-v11 basemap/globe fog was not seen. Video steps need
+  headed Chrome (headless fake camera never resolves); they passed headed
+  before the final dot-wrapper change, and the video code was not touched by it.
+- Not done: Vercel deployment (needs a Mapbox token, a hosted Postgres URL and a
+  Vercel login). Steps: set `DATABASE_URL` + `NEXT_PUBLIC_MAPBOX_TOKEN` in
+  Vercel, run `npx prisma migrate deploy` against that database, deploy.
 - Local development used an in-memory Postgres (PGlite) instead of Neon.
